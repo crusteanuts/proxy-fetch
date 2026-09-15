@@ -1,0 +1,6 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/configuration/schema.json",
+  "name": "proxy-fetch",
+  "main": "./index.js",
+  "compatibility_date": "2026-09-15"
+}

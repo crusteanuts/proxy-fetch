@@ -1,0 +1,10 @@
+{
+  "name": "proxy-fetch",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.132.0"
+  }
+}
