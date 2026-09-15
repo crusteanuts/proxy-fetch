@@ -11,14 +11,26 @@ export default {
     try {
       const targetUrl = new URL(targetParam);
 
-      const headers = new Headers(request.headers);
+      // Only forward headers that are actually needed.
+      const headers = new Headers();
 
-      // Override the upstream Host if one was provided
+      for (const name of [
+        "Accept",
+        "Accept-Language",
+        "Content-Type",
+        "User-Agent",
+      ]) {
+        const value = request.headers.get(name);
+
+        if (value) {
+          headers.set(name, value);
+        }
+      }
+
       if (host) {
         headers.set("Host", host);
       }
 
-      // Don't force JSON
       headers.delete("Accept-Encoding");
 
       const originResponse = await fetch(targetUrl.toString(), {
@@ -30,11 +42,12 @@ export default {
             : undefined,
       });
 
-      // Forward the upstream response headers as-is
       const responseHeaders = new Headers(originResponse.headers);
 
       return new Response(
-        request.method === "HEAD" ? null : originResponse.body,
+        request.method === "HEAD"
+          ? null
+          : originResponse.body,
         {
           status: originResponse.status,
           statusText: originResponse.statusText,
@@ -43,7 +56,11 @@ export default {
       );
     } catch (err) {
       return new Response(
-        JSON.stringify({ error: err.message }),
+        JSON.stringify({
+          error: err instanceof Error
+            ? err.message
+            : String(err),
+        }),
         {
           status: 500,
           headers: {
