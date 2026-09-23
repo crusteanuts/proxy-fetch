@@ -94,11 +94,19 @@ export default {
      *   ]
      * }
      *
-     * If no valid "urls" array is supplied, we fall back to
-     * the original single-URL behavior.
+     * Optional:
+     *
+     * {
+     *   "urls": [...],
+     *   "method": "GET"
+     * }
+     *
+     * If method is omitted, it defaults to HEAD.
+     * This preserves the original batch behavior.
      * ------------------------------------------------------------
      */
     let batchUrls = null;
+    let batchMethod = "HEAD";
 
     if (request.method === "POST") {
       try {
@@ -114,13 +122,11 @@ export default {
 
           if (Array.isArray(body?.urls)) {
             batchUrls = body.urls;
+            batchMethod = body?.method ?? "HEAD";
           }
         }
       } catch {
-        /*
-         * Invalid JSON simply falls through to the
-         * original single-URL behavior.
-         */
+        // Invalid JSON
       }
     }
 
@@ -175,18 +181,49 @@ export default {
               await fetch(
                 targetUrl.toString(),
                 {
-                  method: request.method === "POST"
-                    ? "HEAD"
-                    : request.method,
+                  method: batchMethod,
                   headers,
                 }
               );
+
+            /*
+             * Only read the response body when the
+             * requested method is not HEAD.
+             *
+             * This keeps the existing HEAD behavior
+             * lightweight.
+             */
+            let data = null;
+
+            if (batchMethod !== "HEAD") {
+              const contentType =
+                originResponse.headers.get(
+                  "content-type"
+                ) || "";
+
+              if (
+                contentType
+                  .toLowerCase()
+                  .includes("application/json")
+              ) {
+                try {
+                  data =
+                    await originResponse.json();
+                } catch {
+                  data = null;
+                }
+              }
+            }
 
             return {
               url: targetUrl.toString(),
               status: originResponse.status,
               statusText:
                 originResponse.statusText,
+              headers: Object.fromEntries(
+                originResponse.headers.entries()
+              ),
+              data,
             };
           } catch (err) {
             return {
