@@ -31,9 +31,6 @@ export default {
        * Do NOT manually override Host.
        *
        * The target URL already determines the destination host.
-       *
-       * Keeping this out avoids introducing a potentially
-       * misleading Host header into the outbound fetch.
        */
 
       /*
@@ -68,7 +65,7 @@ export default {
 
     /*
      * ------------------------------------------------------------
-     * Build detailed exception information.
+     * Detailed exception information.
      * ------------------------------------------------------------
      */
     const getErrorDetails = (err) => {
@@ -100,11 +97,10 @@ export default {
 
     /*
      * ------------------------------------------------------------
-     * Build diagnostic information about the request.
+     * Safe request diagnostics.
      *
-     * IMPORTANT:
-     * Do not include Cookie / Authorization / IP identity
-     * headers in the diagnostic output.
+     * Deliberately does NOT expose client IP identity headers,
+     * cookies, authorization, etc.
      * ------------------------------------------------------------
      */
     const getRequestDiagnostics = () => {
@@ -133,12 +129,16 @@ export default {
 
     /*
      * ------------------------------------------------------------
-     * Single URL fetch helper
+     * Single URL fetch helper.
+     *
+     * This is retained for compatibility with the existing
+     * worker structure.
      * ------------------------------------------------------------
      */
     const fetchSingle = async (targetParam) => {
       if (!targetParam) {
         return {
+          status: "validation-error",
           error: "Missing 'url' parameter",
         };
       }
@@ -182,24 +182,24 @@ export default {
         );
 
         /*
-         * If fetch() succeeds, even a 404/403/500 is NOT a
-         * Worker exception.
+         * fetch() succeeded.
          *
-         * This means the target server actually responded.
+         * A 404 / 403 / 500 is still a successful fetch()
+         * from the Worker perspective because the origin returned
+         * an HTTP response.
          */
         return {
           status: "origin-response",
           url: targetUrl.toString(),
           statusCode: originResponse.status,
           statusText: originResponse.statusText,
+          ok: originResponse.ok,
           responseHeaders: Object.fromEntries(
             originResponse.headers.entries()
           ),
         };
       } catch (err) {
         /*
-         * This is the important case.
-         *
          * fetch() itself failed before an origin Response
          * was returned.
          */
@@ -255,10 +255,10 @@ export default {
             batchMethod = body?.method ?? "HEAD";
           }
         }
-      } catch (err) {
+      } catch {
         /*
-         * Invalid JSON is intentionally ignored here so that
-         * the original single-URL behavior remains intact.
+         * Invalid JSON is intentionally ignored so that the
+         * existing single-URL behavior remains intact.
          */
       }
     }
@@ -292,7 +292,8 @@ export default {
           {
             status: 400,
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type":
+                "application/json",
             },
           }
         );
@@ -301,15 +302,15 @@ export default {
       /*
        * Process all URLs concurrently.
        *
-       * Each URL gets its own result, so one failed URL
-       * does not cause the entire batch to fail.
+       * Each URL gets its own result.
        */
       const results = await Promise.all(
         batchUrls.map(async (targetParam) => {
           let targetUrl;
 
           try {
-            targetUrl = new URL(targetParam);
+            targetUrl =
+              new URL(targetParam);
           } catch (err) {
             return {
               status: "invalid-url",
@@ -324,9 +325,12 @@ export default {
             headers = buildHeaders();
           } catch (err) {
             return {
-              status: "header-construction-error",
-              url: targetUrl.toString(),
-              error: getErrorDetails(err),
+              status:
+                "header-construction-error",
+              url:
+                targetUrl.toString(),
+              error:
+                getErrorDetails(err),
             };
           }
 
@@ -367,25 +371,37 @@ export default {
             }
 
             return {
-              status: "origin-response",
-              url: targetUrl.toString(),
-              statusCode: originResponse.status,
+              status:
+                "origin-response",
+              url:
+                targetUrl.toString(),
+              statusCode:
+                originResponse.status,
               statusText:
                 originResponse.statusText,
-              headers: Object.fromEntries(
-                originResponse.headers.entries()
-              ),
+              ok:
+                originResponse.ok,
+              headers:
+                Object.fromEntries(
+                  originResponse.headers.entries()
+                ),
               data,
             };
           } catch (err) {
             return {
-              status: "worker-fetch-exception",
-              url: targetUrl.toString(),
-              error: getErrorDetails(err),
+              status:
+                "worker-fetch-exception",
+              url:
+                targetUrl.toString(),
+              error:
+                getErrorDetails(err),
               request: {
-                method: batchMethod,
-                workerUrl: request.url,
-                requestedHost: host || null,
+                method:
+                  batchMethod,
+                workerUrl:
+                  request.url,
+                requestedHost:
+                  host || null,
               },
             };
           }
@@ -395,8 +411,10 @@ export default {
       return new Response(
         JSON.stringify(
           {
-            status: "batch-complete",
-            count: results.length,
+            status:
+              "batch-complete",
+            count:
+              results.length,
             results,
           },
           null,
@@ -416,16 +434,17 @@ export default {
      * ------------------------------------------------------------
      * ORIGINAL SINGLE-URL FALLBACK
      *
-     * If no batch was supplied, behavior remains the
-     * original ?url=... behavior.
+     * If no batch was supplied, use ?url=...
      * ------------------------------------------------------------
      */
     if (!targetParam) {
       return new Response(
         JSON.stringify(
           {
-            status: "validation-error",
-            error: "Missing 'url' parameter",
+            status:
+              "validation-error",
+            error:
+              "Missing 'url' parameter",
           },
           null,
           2
@@ -443,15 +462,20 @@ export default {
     let targetUrl;
 
     try {
-      targetUrl = new URL(targetParam);
+      targetUrl =
+        new URL(targetParam);
     } catch (err) {
       return new Response(
         JSON.stringify(
           {
-            status: "invalid-url",
-            targetUrl: targetParam,
-            error: getErrorDetails(err),
-            request: getRequestDiagnostics(),
+            status:
+              "invalid-url",
+            targetUrl:
+              targetParam,
+            error:
+              getErrorDetails(err),
+            request:
+              getRequestDiagnostics(),
           },
           null,
           2
@@ -469,16 +493,20 @@ export default {
     let headers;
 
     try {
-      headers = buildHeaders();
+      headers =
+        buildHeaders();
     } catch (err) {
       return new Response(
         JSON.stringify(
           {
             status:
               "header-construction-error",
-            targetUrl: targetUrl.toString(),
-            error: getErrorDetails(err),
-            request: getRequestDiagnostics(),
+            targetUrl:
+              targetUrl.toString(),
+            error:
+              getErrorDetails(err),
+            request:
+              getRequestDiagnostics(),
           },
           null,
           2
@@ -493,6 +521,11 @@ export default {
       );
     }
 
+    /*
+     * ------------------------------------------------------------
+     * SINGLE URL FETCH
+     * ------------------------------------------------------------
+     */
     try {
       const originResponse =
         await fetch(
@@ -511,12 +544,105 @@ export default {
 
       /*
        * ----------------------------------------------------------
-       * IMPORTANT:
+       * HEAD DIAGNOSTIC MODE
        *
-       * A 404 / 403 / 500 here means the origin actually
-       * returned that status.
+       * Instead of passing the HEAD response straight through,
+       * return detailed JSON so we can see exactly what the
+       * origin returned.
        *
-       * It is NOT converted into a Worker 500.
+       * This is intentionally HTTP 200 because the JSON itself
+       * is the diagnostic response. The actual origin status is
+       * inside origin.statusCode.
+       * ----------------------------------------------------------
+       */
+      if (request.method === "HEAD") {
+        return new Response(
+          JSON.stringify(
+            {
+              status:
+                "origin-response",
+
+              target: {
+                url:
+                  targetUrl.toString(),
+                host:
+                  targetUrl.hostname,
+                protocol:
+                  targetUrl.protocol,
+                port:
+                  targetUrl.port ||
+                  (
+                    targetUrl.protocol ===
+                    "https:"
+                      ? "443"
+                      : "80"
+                  ),
+                pathname:
+                  targetUrl.pathname,
+                method:
+                  request.method,
+              },
+
+              origin: {
+                statusCode:
+                  originResponse.status,
+                statusText:
+                  originResponse.statusText,
+                ok:
+                  originResponse.ok,
+                headers:
+                  Object.fromEntries(
+                    originResponse.headers.entries()
+                  ),
+              },
+
+              worker: {
+                url:
+                  request.url,
+                requestedHost:
+                  host || null,
+              },
+
+              outboundHeaders:
+                Object.fromEntries(
+                  headers.entries()
+                ),
+
+              removedClientIdentityHeaders: [
+                "Cookie",
+                "Authorization",
+                "Referer",
+                "Origin",
+                "X-Forwarded-For",
+                "X-Real-IP",
+                "True-Client-IP",
+                "CF-Connecting-IP",
+                "CF-Connecting-IPv6",
+                "CF-Worker",
+                "Accept-Encoding",
+              ],
+
+              interpretation:
+                "fetch() completed successfully and the origin returned an HTTP response. origin.statusCode is the actual origin HTTP status."
+            },
+            null,
+            2
+          ),
+          {
+            status: 200,
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+          }
+        );
+      }
+
+      /*
+       * ----------------------------------------------------------
+       * NORMAL GET / non-HEAD behavior
+       *
+       * Pass the actual origin response through unchanged.
        * ----------------------------------------------------------
        */
       const responseHeaders =
@@ -525,9 +651,7 @@ export default {
         );
 
       return new Response(
-        request.method === "HEAD"
-          ? null
-          : originResponse.body,
+        originResponse.body,
         {
           status:
             originResponse.status,
@@ -540,12 +664,12 @@ export default {
     } catch (err) {
       /*
        * ----------------------------------------------------------
-       * THIS IS THE CRITICAL DEBUGGING PATH.
+       * WORKER FETCH EXCEPTION
        *
-       * If we get here, fetch() itself threw.
+       * fetch() itself failed.
        *
-       * Therefore there was no normal HTTP response from
-       * the target available to return.
+       * Therefore there was no normal HTTP response from the
+       * origin available to return.
        * ----------------------------------------------------------
        */
       const errorDetails =
@@ -599,10 +723,6 @@ export default {
                 headers.entries()
               ),
 
-            /*
-             * Explicitly state that these client identity
-             * headers were removed before fetch().
-             */
             removedClientIdentityHeaders: [
               "Cookie",
               "Authorization",
@@ -618,7 +738,7 @@ export default {
             ],
 
             interpretation:
-              "This response was generated by the Worker because fetch() threw an exception. It was not generated from an HTTP status returned by the target server.",
+              "fetch() itself failed. This is a Worker-side fetch exception, not an HTTP status returned by the origin."
           },
           null,
           2
