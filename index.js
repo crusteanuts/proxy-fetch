@@ -11,7 +11,7 @@ export default {
      */
     const buildHeaders = () => {
       const headers = new Headers();
-
+    
       for (const name of [
         "Accept",
         "Accept-Language",
@@ -19,18 +19,43 @@ export default {
         "User-Agent",
       ]) {
         const value = request.headers.get(name);
-
+    
         if (value) {
           headers.set(name, value);
         }
       }
-
+    
       if (host) {
         headers.set("Host", host);
       }
-
+    
+      /*
+       * ----------------------------------------------------------
+       * Never intentionally forward client identity / proxy
+       * headers to the target.
+       * ----------------------------------------------------------
+       */
+      for (const name of [
+        "Cookie",
+        "Authorization",
+        "Referer",
+        "Origin",
+        "X-Forwarded-For",
+        "X-Real-IP",
+        "True-Client-IP",
+        "CF-Connecting-IP",
+        "CF-Connecting-IPv6",
+        "CF-Worker",
+      ]) {
+        headers.delete(name);
+      }
+    
+      /*
+       * Let Cloudflare manage compression for the outbound
+       * request rather than forwarding the client's value.
+       */
       headers.delete("Accept-Encoding");
-
+    
       return headers;
     };
 
