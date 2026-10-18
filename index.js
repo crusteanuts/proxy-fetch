@@ -11,7 +11,7 @@ export default {
      */
     const buildHeaders = () => {
       const headers = new Headers();
-    
+
       for (const name of [
         "Accept",
         "Accept-Language",
@@ -19,16 +19,16 @@ export default {
         "User-Agent",
       ]) {
         const value = request.headers.get(name);
-    
+
         if (value) {
           headers.set(name, value);
         }
       }
-    
+
       if (host) {
         headers.set("Host", host);
       }
-    
+
       /*
        * ----------------------------------------------------------
        * Never intentionally forward client identity / proxy
@@ -49,13 +49,13 @@ export default {
       ]) {
         headers.delete(name);
       }
-    
+
       /*
        * Let Cloudflare manage compression for the outbound
        * request rather than forwarding the client's value.
        */
       headers.delete("Accept-Encoding");
-    
+
       return headers;
     };
 
@@ -84,7 +84,7 @@ export default {
             headers,
             body:
               request.method !== "GET" &&
-              request.method !== "HEAD"
+                request.method !== "HEAD"
                 ? request.body
                 : undefined,
           }
@@ -130,10 +130,11 @@ export default {
      * This preserves the original batch behavior.
      * ------------------------------------------------------------
      */
-    let batchUrls = null;
-    let batchMethod = "HEAD";
+     let batchUrls = null;
+     let batchMethod = "HEAD";
+     let batchProxyOptions = {};
 
-    if (request.method === "POST") {
+     if (request.method === "POST") {
       try {
         const contentType =
           request.headers.get("Content-Type") || "";
@@ -148,6 +149,12 @@ export default {
           if (Array.isArray(body?.urls)) {
             batchUrls = body.urls;
             batchMethod = body?.method ?? "HEAD";
+            batchProxyOptions =
+              body?.proxyOptions &&
+                typeof body.proxyOptions === "object" &&
+                !Array.isArray(body.proxyOptions)
+                ? body.proxyOptions
+                : {};
           }
         }
       } catch {
@@ -161,6 +168,28 @@ export default {
      * ------------------------------------------------------------
      */
     if (Array.isArray(batchUrls)) {
+      const redirectMode =
+        batchProxyOptions.redirect ?? "follow";
+      const responseType =
+        batchProxyOptions.responseType ?? "auto";
+
+      if (
+        !["follow", "manual", "error"].includes(redirectMode) ||
+        !["auto", "json", "text"].includes(responseType)
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: "Invalid proxyOptions.redirect or proxyOptions.responseType",
+          }),
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
       /*
        * Basic validation.
        *
@@ -208,6 +237,7 @@ export default {
                 {
                   method: batchMethod,
                   headers,
+                  redirect: redirectMode,
                 }
               );
 
@@ -220,7 +250,21 @@ export default {
              */
             let data = null;
 
-            if (batchMethod !== "HEAD") {
+            if (
+              batchMethod !== "HEAD" &&
+              responseType === "text"
+            ) {
+              data = await originResponse.text();
+            } else if (
+              batchMethod !== "HEAD" &&
+              responseType === "json"
+            ) {
+              try {
+                data = await originResponse.json();
+              } catch {
+                data = null;
+              }
+            } else if (batchMethod !== "HEAD") {
               const contentType =
                 originResponse.headers.get(
                   "content-type"
@@ -308,7 +352,7 @@ export default {
             headers,
             body:
               request.method !== "GET" &&
-              request.method !== "HEAD"
+                request.method !== "HEAD"
                 ? request.body
                 : undefined,
           }
