@@ -238,6 +238,11 @@ export default {
                   method: batchMethod,
                   headers,
                   redirect: redirectMode,
+                  cf: {
+                    cacheTtlByStatus: {
+                      "500-599": 0,
+                    },
+                  },                  
                 }
               );
 
@@ -355,6 +360,11 @@ export default {
                 request.method !== "HEAD"
                 ? request.body
                 : undefined,
+            cf: {
+              cacheTtlByStatus: {
+                "500-599": 0,
+              },
+            },                
           }
         );
 
