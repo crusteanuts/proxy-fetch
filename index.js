@@ -223,9 +223,21 @@ export default {
        * Each URL gets its own result, so one failed URL
        * does not cause the entire batch to fail.
        */
+      const REQUEST_START_DELAY_MS = 200;
+
       const results = await Promise.all(
-        batchUrls.map(async (targetParam) => {
+        batchUrls.map(async (targetParam, index) => {
           try {
+            // Stagger the start of each outgoing SmugMug request.
+            if (index > 0) {
+              await new Promise(resolve =>
+                setTimeout(
+                  resolve,
+                  index * REQUEST_START_DELAY_MS
+                )
+              );
+            }
+
             const targetUrl =
               new URL(targetParam);
 
@@ -242,12 +254,12 @@ export default {
               );
 
             /*
-             * Only read the response body when the
-             * requested method is not HEAD.
-             *
-             * This keeps the existing HEAD behavior
-             * lightweight.
-             */
+            * Only read the response body when the
+            * requested method is not HEAD.
+            *
+            * This keeps the existing HEAD behavior
+            * lightweight.
+            */
             let data = null;
 
             if (
